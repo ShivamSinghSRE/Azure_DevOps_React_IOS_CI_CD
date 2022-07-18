@@ -1,0 +1,67 @@
+trigger:
+  branches:
+    include:
+      - master
+variables:
+  - group: Mobile
+pool:
+  vmImage: 'macos-latest'
+steps:
+  - checkout: self
+    persistCredentials: true
+    clean: true
+- script: yarn install
+  - task: InstallAppleCertificate@2
+    displayName: Install Apple Certificate
+    inputs:
+      certSecureFile: 'ios_Certificates.p12'
+      certPwd: '$(AppleCertificatePassword)'
+      keychain: 'temp'
+      deleteCert: true
+  - task: InstallAppleProvisioningProfile@1
+    displayName: 'Install Apple Provisioning Profile'
+    inputs:
+      provisioningProfileLocation: 'secureFiles'
+      provProfileSecureFile: 'App.mobileprovision'
+      removeProfile: true
+- task: CocoaPods@0
+    displayName: 'Install CocoaPods'
+    inputs:
+      workingDirectory: 'ios'
+  - task: Xcode@5
+    displayName: 'Build IPA'
+    inputs:
+      actions: 'build'
+      configuration: 'Release'
+      sdk: 'iphoneos'
+      xcWorkspacePath: 'ios/myproject.xcworkspace'
+      scheme: 'myproject'
+      packageApp: true
+      exportPath: 'output'
+      signingOption: 'manual'
+      signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
+      provisioningProfileUuid: '$(APPLE_PROV_PROFILE_UUID)'
+  - task: CopyFiles@2
+    displayName: 'Copy IPA'
+    inputs:
+      contents: '**/*.ipa'
+      targetFolder: '$(build.artifactStagingDirectory)'
+      overWrite: true
+      flattenFolders: true
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish IPA to artifacts'
+    inputs:
+      PathtoPublish: '$(build.artifactStagingDirectory)'
+      ArtifactName: 'ios'
+      publishLocation: 'Container'
+- task: AppCenterDistribute@3
+    displayName: 'Upload IPA to AppCenter'
+    inputs:
+      serverEndpoint: 'App Center'
+      appSlug: 'shivam/MyProject-iOS'
+      appFile: 'output/MyProject.ipa'
+      releaseNotesOption: 'file'
+      isMandatory: true
+      destinationType: 'groups'
+      distributionGroupId: '058a4704-ea24-4877-a2f0-bdfaff9335dc'
+      isSilent: true
